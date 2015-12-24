@@ -1,5 +1,6 @@
 """CAS authentication middleware"""
 
+from datetime import datetime
 from urllib import urlencode
 
 from django.http import HttpResponseRedirect, HttpResponseForbidden
@@ -8,7 +9,7 @@ from django.contrib.auth import REDIRECT_FIELD_NAME
 from django.contrib.auth.views import login, logout
 from django.core.urlresolvers import reverse
 
-from django_cas.views import login as cas_login, logout as cas_logout, _service_url
+from django_cas.views import login as cas_login, logout as cas_logout, _service_url, instant_login, instant_login_url
 
 __all__ = ['CASMiddleware']
 
@@ -16,18 +17,13 @@ class CASMiddleware(object):
     """Middleware that allows CAS authentication on admin pages"""
 
     def process_request(self, request):
-        """Logs in the user if a ticket is append as parameter"""
+        """Checks that the authentication middleware is installed"""
 
-        ticket = request.REQUEST.get('ticket')
-
-        if ticket:
-            from django.contrib import auth
-            user = auth.authenticate(ticket=ticket, service=_service_url(request))
-            if user is not None:
-                auth.login(request, user)
-
-
-
+        error = ("The Django CAS middleware requires authentication "
+                 "middleware to be installed. Edit your MIDDLEWARE_CLASSES "
+                 "setting to insert 'django.contrib.auth.middleware."
+                 "AuthenticationMiddleware'.")
+        assert hasattr(request, 'user'), error
 
     def process_view(self, request, view_func, view_args, view_kwargs):
         """Forwards unauthenticated requests to the admin page to the CAS
@@ -55,3 +51,28 @@ class CASMiddleware(object):
                 return HttpResponseForbidden(error)
         params = urlencode({REDIRECT_FIELD_NAME: request.get_full_path()})
         return HttpResponseRedirect(reverse(cas_login) + '?' + params)
+
+
+class CASInstantLoginMiddleware(object):
+    """Allows instant login if user is already authenticated with CAS-server
+
+    Requires CAS server to have gateway feature enabled"""
+
+    SESSION_KEY = 'cas_instant_login_attempt'
+
+    def process_view(self, request, view_func, view_args, view_kwargs):
+        view_name = view_func.__module__ + '.' + view_func.__name__
+
+        if (request.user.is_authenticated()
+            or view_func in (cas_login, cas_logout, instant_login)
+            or any(view_name.startswith(prefix)
+                   for prefix in settings.CAS_INSTANT_LOGIN_EXEMPT)):
+            return None
+
+        last_login_attempt = request.session.get(self.SESSION_KEY, False)
+        if (not last_login_attempt
+            or not isinstance(last_login_attempt, datetime)
+            or (datetime.now() - last_login_attempt).seconds > settings.CAS_INSTANT_LOGIN_TIMEOUT):
+
+            request.session[self.SESSION_KEY] = datetime.now()
+            return HttpResponseRedirect(instant_login_url(request))

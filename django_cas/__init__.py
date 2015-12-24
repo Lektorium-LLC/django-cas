@@ -7,6 +7,8 @@ __all__ = []
 _DEFAULTS = {
     'CAS_ADMIN_PREFIX': None,
     'CAS_EXTRA_LOGIN_PARAMS': None,
+    'CAS_INSTANT_LOGIN_TIMEOUT': 300,
+    'CAS_INSTANT_LOGIN_EXEMPT': [],
     'CAS_IGNORE_REFERER': False,
     'CAS_LOGOUT_COMPLETELY': True,
     'CAS_REDIRECT_URL': '/',
