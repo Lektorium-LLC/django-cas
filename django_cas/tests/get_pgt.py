@@ -5,12 +5,11 @@
 import atexit
 from django_cas.models import PgtIOU
 
+
 @atexit.register
 def lookup_pgt():
-    pgt = PgtIOU.objects.latest('created') 
+    pgt = PgtIOU.objects.latest('created')
     if pgt:
         print pgt.tgt
     else:
         print 'FAIL'
-
-

@@ -13,6 +13,7 @@ from django_cas.views import login as cas_login, logout as cas_logout, _service_
 
 __all__ = ['CASMiddleware']
 
+
 class CASMiddleware(object):
     """Middleware that allows CAS authentication on admin pages"""
 

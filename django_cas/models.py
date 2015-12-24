@@ -1,19 +1,20 @@
 from urlparse import urljoin
 from urllib import urlencode, urlopen
+from datetime import datetime, timedelta
+
 from django.db import models
 from django.conf import settings
-from django.contrib.auth.models import User
 from django.core.exceptions import ObjectDoesNotExist
-from django_cas.exceptions import CasTicketException, CasConfigException
-# Ed Crewe - add in signals to delete old tickets
 from django.db.models.signals import post_save
-from datetime import datetime, timedelta
+
 from django_cas import CAS
+from django_cas.exceptions import CasTicketException, CasConfigException
+
 
 class Tgt(models.Model):
-    username = models.CharField(max_length = 255, unique = True)
-    tgt = models.CharField(max_length = 255)
-    created = models.DateTimeField(auto_now = True)
+    username = models.CharField(max_length=255, unique=True)
+    tgt = models.CharField(max_length=255)
+    created = models.DateTimeField(auto_now=True)
 
     def get_proxy_ticket_for(self, service):
         """Verifies CAS 2.0+ XML-based authentication ticket.
@@ -45,23 +46,26 @@ class Tgt(models.Model):
         finally:
             page.close()
 
+
 class PgtIOU(models.Model):
     """ Proxy granting ticket and IOU """
-    pgtIou = models.CharField(max_length = 255, unique = True)
-    tgt = models.CharField(max_length = 255)
-    created = models.DateTimeField(auto_now = True)
+    pgtIou = models.CharField(max_length=255, unique=True)
+    tgt = models.CharField(max_length=255)
+    created = models.DateTimeField(auto_now=True)
+
 
 def get_tgt_for(user):
     if not settings.CAS_PROXY_CALLBACK:
         raise CasConfigException("No proxy callback set in settings")
 
     try:
-        return Tgt.objects.get(username = user.username)
+        return Tgt.objects.get(username=user.username)
     except ObjectDoesNotExist:
         raise CasTicketException("no ticket found for user " + user.username)
 
+
 def delete_old_tickets(**kwargs):
-    """ Delete tickets if they are over 2 days old 
+    """ Delete tickets if they are over 2 days old
         kwargs = ['raw', 'signal', 'instance', 'sender', 'created']
     """
     sender = kwargs.get('sender', None)

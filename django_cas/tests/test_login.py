@@ -37,9 +37,11 @@ FAILURE_RESPONSE = '''\
     </cas:authenticationFailure>
 </cas:serviceResponse>'''
 
+
 def create_user(username, attributes):
     email = attributes.get('mail', '')
     return User.objects.create_user(username=username, email=email)
+
 
 class CASLoginTest(TestCase):
     """
@@ -180,8 +182,9 @@ class CasInstantLoginTest(TestCase):
             response = self.client.get('/?test=test_uuid')
             middleware_service_url = self._retrieve_url_param(response['Location'], 'service')
 
-            response = self.client.get(reverse(views.instant_login)
-                    + '?' + urllib.urlencode({'ticket':'c3po', REDIRECT_FIELD_NAME: '/?test=test_uuid'}))
+            response = self.client.get(
+                reverse(views.instant_login)
+                + '?' + urllib.urlencode({'ticket': 'c3po', REDIRECT_FIELD_NAME: '/?test=test_uuid'}))
             view_service_url = self._retrieve_url_param(mock_urlopen.call_args[0][0], 'service')
 
             self.assertEqual(middleware_service_url, view_service_url)

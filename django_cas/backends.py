@@ -5,13 +5,14 @@ import logging
 from urlparse import urljoin
 
 from django.conf import settings
+from django.contrib.auth import get_user_model
+
 from django.core.exceptions import ObjectDoesNotExist
 from django.utils.module_loading import import_string
-from django_cas.models import User, Tgt, PgtIOU
+from django_cas.models import Tgt, PgtIOU
 from django_cas import CAS
 
 __all__ = ['CASBackend']
-
 
 
 log = logging.getLogger('django-cas.backend')
@@ -57,16 +58,24 @@ def _verify_cas2(ticket, service):
            urllib.urlencode(params))
 
     page = urllib.urlopen(url)
-    response = page.read()
-    tree = ElementTree.fromstring(response)
-    page.close()
+    try:
+        response = page.read()
+        tree = ElementTree.fromstring(response)
+        page.close()
 
-    if tree.find(CAS + 'authenticationSuccess') is not None:
-        username = tree.find(CAS + 'authenticationSuccess/' + CAS + 'user').text
-        _do_proxy_verification(username, tree)
-        return username, {}
-    else:
-        return None, {}
+        if tree.find(CAS + 'authenticationSuccess') is not None:
+            username = tree.find(CAS + 'authenticationSuccess/' + CAS + 'user').text
+            _do_proxy_verification(username, tree)
+            return username, {}
+        else:
+            failure = tree.find(CAS + 'authenticationFailure')
+            if failure:
+                logger.warn('Authentication failed from CAS server: %s', failure.text)
+            return None, {}
+    except Exception as e:
+        logger.error('Failed to verify CAS authentication: {message}'.format(message=e))
+    finally:
+        page.close
 
 
 def _verify_cas3(ticket, service):
@@ -90,9 +99,9 @@ def _verify_cas3(ticket, service):
         tree = ElementTree.fromstring(response)
         if tree[0].tag.endswith('authenticationSuccess'):
             for element in tree[0]:
-               if element.tag.endswith('user'):
+                if element.tag.endswith('user'):
                     username = element.text
-               elif element.tag.endswith('attributes'):
+                elif element.tag.endswith('attributes'):
                     for attribute in element:
                         attributes[attribute.tag.split("}").pop()] = attribute.text
             _do_proxy_verification(username, tree)
@@ -102,17 +111,17 @@ def _verify_cas3(ticket, service):
 
 
 def _do_proxy_verification(username, tree):
-    pgtIouIdElement = tree.find(CAS + 'authenticationSuccess/' + CAS + 'proxyGrantingTicket');
+    pgtIouIdElement = tree.find(CAS + 'authenticationSuccess/' + CAS + 'proxyGrantingTicket')
     pgtIouId = pgtIouIdElement.text if pgtIouIdElement is not None else None
 
     if pgtIouId:
-        pgtIou = PgtIOU.objects.get(pgtIou = pgtIouId)
+        pgtIou = PgtIOU.objects.get(pgtIou=pgtIouId)
         try:
-            tgt = Tgt.objects.get(username = username)
+            tgt = Tgt.objects.get(username=username)
             tgt.tgt = pgtIou.tgt
             tgt.save()
         except ObjectDoesNotExist:
-            Tgt.objects.create(username = username, tgt = pgtIou.tgt)
+            Tgt.objects.create(username=username, tgt=pgtIou.tgt)
 
         pgtIou.delete()
 
@@ -153,14 +162,14 @@ def verify_proxy_ticket(ticket, service):
 
 
 _PROTOCOLS = {'1': _verify_cas1, '2': _verify_cas2, '3': _verify_cas3}
+_CAS_USER_DETAILS_RESOLVER = getattr(settings, 'CAS_USER_DETAILS_RESOLVER', None)
+
 
 def _get_verification():
     # Requires separate function since tests are not running with global variables
     if settings.CAS_VERSION not in _PROTOCOLS:
         raise ValueError('Unsupported CAS_VERSION %r' % settings.CAS_VERSION)
     return _PROTOCOLS[settings.CAS_VERSION]
-
-_CAS_USER_DETAILS_RESOLVER = getattr(settings, 'CAS_USER_DETAILS_RESOLVER', None)
 
 
 class CASBackend(object):
@@ -170,6 +179,7 @@ class CASBackend(object):
         """Verifies CAS ticket and gets or creates User object
            NB: Use of PT to identify proxy
         """
+        User = get_user_model()
         _verify = _get_verification()
 
         username, attributes = _verify(ticket, service)
@@ -190,6 +200,8 @@ class CASBackend(object):
     def get_user(self, user_id):
         """Retrieve the user's entry in the User model if it exists"""
 
+        User = get_user_model()
+
         try:
             return User.objects.get(pk=user_id)
         except User.DoesNotExist:
@@ -204,6 +216,7 @@ def _create_user(username, attributes):
     if user_creator:
         return user_creator(username, attributes)
     else:
+        User = get_user_model()
         user = User(username=username, email=username)
         user.set_unusable_password()
 

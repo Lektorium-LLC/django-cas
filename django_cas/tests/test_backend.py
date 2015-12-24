@@ -8,6 +8,7 @@ from django_cas.models import PgtIOU, Tgt
 
 __author__ = 'sannies'
 
+
 def dummyUrlOpenNoProxyGrantingTicket(url):
     return StringIO(
         '<cas:serviceResponse xmlns:cas="http://www.yale.edu/tp/cas"><cas:authenticationSuccess><cas:user>sannies</cas:user><cas:attributes><cas:attraStyle>Jasig</cas:attraStyle><cas:merchant>sannies</cas:merchant><cas:userServerUrl>http://localhost:8080/user-authorization-adapter/</cas:userServerUrl><cas:firstname></cas:firstname><cas:lastname></cas:lastname><cas:is_superuser>True</cas:is_superuser><cas:is_staff>True</cas:is_staff><cas:ROLES>ROLE_SUPERUSER</cas:ROLES><cas:ROLES>ROLE_STAFF</cas:ROLES><cas:ROLES>ROLE_USER</cas:ROLES><cas:ROLES>ROLE_MERCHANT</cas:ROLES><cas:playReadyLicenseAcquisitionUiUrl>http://www.drmtoday.com/</cas:playReadyLicenseAcquisitionUiUrl><cas:email>Sebastian.Annies@castlabs.com</cas:email></cas:attributes></cas:authenticationSuccess></cas:serviceResponse>')
@@ -27,12 +28,11 @@ class backendTest(TestCase):
 
     def test_verify_cas2_with_pgt(self):
         urllib.urlopen = dummyUrlOpenWithProxyGrantingTikcet
-        #st = ServiceTicket.objects.create();
-        tgt = Tgt.objects.create(username='sannies');
+        tgt = Tgt.objects.create(username='sannies')
         PgtIOU.objects.create(tgt=tgt, pgtIou='PGTIOU-NUYny6RiAfHBsuWq270m3l1kgPTjEOCexpowQV9ZJDrh8cGKzb')
 
         settings.CAS_PROXY_CALLBACK = "http://dummy2"
         prior = PgtIOU.objects.count()
         user, authentication_response = _verify_cas2('ST-jkadfhjksdhjkfh', 'http://dummy')
-        self.assertEqual(prior - 1, PgtIOU.objects.count()) # the pgtiou should be used up and deleted
+        self.assertEqual(prior - 1, PgtIOU.objects.count())  # the pgtiou should be used up and deleted
         self.assertEqual('sannies', user)
